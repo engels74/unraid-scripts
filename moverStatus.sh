@@ -146,6 +146,18 @@ if $DRY_RUN; then
     dry_run_value_message_telegram="Moving data from SSD Cache to HDD Array. &#10;Progress: <b>${dry_run_percent}%</b> complete. &#10;Remaining data: ${dry_run_remaining_data}.&#10;Estimated completion time: ${dry_run_etc_telegram}.&#10;&#10;Note: Services like Plex may run slow or be unavailable during the move.&#10;&#10${footer_text}"
     dry_run_value_message_ntfy="Moving data from SSD Cache to HDD Array.\nProgress: ${dry_run_percent}% complete.\nRemaining data: ${dry_run_remaining_data}.\nEstimated completion time: ${dry_run_etc_telegram}.\n\nNote: Services like Plex may run slow or be unavailable during the move.\n\n${footer_text}"
 
+    # Determine emoji tag based on percentage
+    if [ "$dry_run_percent" -le 34 ]; then
+        dry_run_emoji_tag=":red_circle:"  # Red circle
+    elif [ "$dry_run_percent" -le 65 ]; then
+        dry_run_emoji_tag=":orange_circle:"  # Orange circle
+    else
+        dry_run_emoji_tag=":green_circle:"   # Green circle
+    fi
+
+    # Prepend the emoji tag to the ntfy.sh message
+    dry_run_value_message_ntfy="$dry_run_emoji_tag $dry_run_value_message_ntfy"
+
     # Send test notifications
     if $USE_TELEGRAM; then
         log "Sending test notification to Telegram..."
@@ -298,6 +310,23 @@ function send_notification {
             color=9498256   # Light Green
         fi
     fi
+
+    # Determine the emoji tag based on completion and percentage
+    local ntfy_emoji
+    if [ "$percent" -ge 100 ] || ! pgrep -x "$(basename $MOVER_EXECUTABLE)" > /dev/null; then
+        ntfy_emoji=":white_check_mark:"  # Green checkmark for completion
+    else
+        if [ "$percent" -le 34 ]; then
+            ntfy_emoji=":red_circle:"  # Red circle
+        elif [ "$percent" -le 65 ]; then
+            ntfy_emoji=":orange_circle:"  # Orange circle
+        else
+            ntfy_emoji=":green_circle:"  # Green circle
+        fi
+    fi
+
+    # Prepend the emoji tag to the ntfy.sh message
+    value_message_ntfy="$ntfy_emoji $value_message_ntfy"
 
     # Send the notifications
     log "Sending notification..."
