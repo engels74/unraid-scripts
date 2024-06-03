@@ -144,19 +144,16 @@ if $DRY_RUN; then
     # Prepare messages with footer
     dry_run_value_message_discord="Moving data from SSD Cache to HDD Array.\nProgress: **${dry_run_percent}%** complete.\nRemaining data: ${dry_run_remaining_data}.\nEstimated completion time: ${dry_run_etc_discord}.\n\nNote: Services like Plex may run slow or be unavailable during the move."
     dry_run_value_message_telegram="Moving data from SSD Cache to HDD Array. &#10;Progress: <b>${dry_run_percent}%</b> complete. &#10;Remaining data: ${dry_run_remaining_data}.&#10;Estimated completion time: ${dry_run_etc_telegram}.&#10;&#10;Note: Services like Plex may run slow or be unavailable during the move.&#10;&#10${footer_text}"
-    dry_run_value_message_ntfy="Moving data from SSD Cache to HDD Array.\nProgress: ${dry_run_percent}% complete.\nRemaining data: ${dry_run_remaining_data}.\nEstimated completion time: ${dry_run_etc_telegram}.\n\nNote: Services like Plex may run slow or be unavailable during the move.\n\n${footer_text}"
+    dry_run_value_message_ntfy="Moving data from SSD Cache to HDD Array."$'\n'"Progress: ${dry_run_percent}% complete."$'\n'"Remaining data: ${dry_run_remaining_data}."$'\n'"Estimated completion time: ${dry_run_etc_telegram}."$'\n\n'"Note: Services like Plex may run slow or be unavailable during the move."$'\n\n'"${footer_text}"
 
     # Determine emoji tag based on percentage
     if [ "$dry_run_percent" -le 34 ]; then
-        dry_run_emoji_tag=":red_circle:"  # Red circle
+        dry_run_emoji_tag="red_circle"  # Red circle
     elif [ "$dry_run_percent" -le 65 ]; then
-        dry_run_emoji_tag=":orange_circle:"  # Orange circle
+        dry_run_emoji_tag="orange_circle"  # Orange circle
     else
-        dry_run_emoji_tag=":green_circle:"   # Green circle
+        dry_run_emoji_tag="green_circle"   # Green circle
     fi
-
-    # Prepend the emoji tag to the ntfy.sh message
-    dry_run_value_message_ntfy="$dry_run_emoji_tag $dry_run_value_message_ntfy"
 
     # Send test notifications
     if $USE_TELEGRAM; then
@@ -195,7 +192,7 @@ if $DRY_RUN; then
     
     if $USE_NTFY; then
         log "Sending test notification to ntfy.sh..."
-        /usr/bin/curl -s -o /dev/null -H "Title: Mover Status Update (Dry Run)" -d "$dry_run_value_message_ntfy" "$NTFY_SERVER/$NTFY_TOPIC"
+        /usr/bin/curl -s -o /dev/null -H "Title: Mover Status Update (Dry Run)" -H "Tags: $dry_run_emoji_tag" -d "$dry_run_value_message_ntfy" "$NTFY_SERVER/$NTFY_TOPIC"
     fi
     
     log "Dry-run complete. Exiting script."
@@ -292,7 +289,7 @@ function send_notification {
         footer_text+=" (update available)"
     fi
     value_message_telegram+="&#10;&#10$footer_text"
-    value_message_ntfy+="\n\n$footer_text"
+    value_message_ntfy+=$'\n\n'"$footer_text"
 
     # Determine the color based on completion and percentage
     local color
@@ -314,19 +311,16 @@ function send_notification {
     # Determine the emoji tag based on completion and percentage
     local ntfy_emoji
     if [ "$percent" -ge 100 ] || ! pgrep -x "$(basename $MOVER_EXECUTABLE)" > /dev/null; then
-        ntfy_emoji=":white_check_mark:"  # Green checkmark for completion
+        ntfy_emoji="white_check_mark"  # Green checkmark for completion
     else
         if [ "$percent" -le 34 ]; then
-            ntfy_emoji=":red_circle:"  # Red circle
+            ntfy_emoji="red_circle"  # Red circle
         elif [ "$percent" -le 65 ]; then
-            ntfy_emoji=":orange_circle:"  # Orange circle
+            ntfy_emoji="orange_circle"  # Orange circle
         else
-            ntfy_emoji=":green_circle:"  # Green circle
+            ntfy_emoji="green_circle"  # Green circle
         fi
     fi
-
-    # Prepend the emoji tag to the ntfy.sh message
-    value_message_ntfy="$ntfy_emoji $value_message_ntfy"
 
     # Send the notifications
     log "Sending notification..."
@@ -372,12 +366,12 @@ function send_notification {
             log "Discord response: $response"
         fi
     fi
-    
+
     if $USE_NTFY; then
         if $ENABLE_DEBUG; then
             log "Preparing to send to ntfy.sh: $value_message_ntfy"
         fi
-        local response=$(curl -s -H "Title: Mover Status Update" -d "$value_message_ntfy" "$NTFY_SERVER/$NTFY_TOPIC")
+        local response=$(curl -s -H "Title: Mover Status Update" -H "Tags: $ntfy_emoji" -d "$value_message_ntfy" "$NTFY_SERVER/$NTFY_TOPIC")
         if $ENABLE_DEBUG; then
             log "ntfy.sh response: $response"
         fi
