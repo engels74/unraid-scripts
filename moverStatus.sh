@@ -136,7 +136,7 @@ if $DRY_RUN; then
     fi
 
     # Footer text with version checking
-    local footer_text="Version: v${CURRENT_VERSION}"
+    footer_text="Version: v${CURRENT_VERSION}"
     if [[ "${LATEST_VERSION}" != "${CURRENT_VERSION}" ]]; then
         footer_text+=" (update available)"
     fi
