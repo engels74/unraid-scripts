@@ -2,7 +2,7 @@
 
 # Script Metadata
 #name=Mover Status Script
-#description=This script monitors the progress of the "Mover" process and posts updates to a Discord/Telegram webhook.
+#description=This script monitors the progress of the "Mover" process and posts updates to a Discord/Telegram/ntfy.sh webhook.
 #backgroundOnly=true
 #arrayStarted=true
 
@@ -20,10 +20,13 @@ log "Starting Mover Status Monitor..."
 # Configure basic settings and webhook details
 USE_TELEGRAM=false                                                      # Enable notifications to Telegram
 USE_DISCORD=false                                                       # Enable notifications to Discord
+USE_NTFY=false                                                          # Enable notifications to ntfy.sh
 TELEGRAM_BOT_TOKEN="xxxx"                                               # Telegram bot token
 TELEGRAM_CHAT_ID="xxxx"                                                 # Telegram chat ID
 DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/xxxx/xxxx"        # Discord webhook URL
 DISCORD_NAME_OVERRIDE="Mover Bot"                                       # Display name for Discord notifications
+NTFY_TOPIC="your_topic_name"                                            # ntfy.sh topic name
+NTFY_SERVER="https://ntfy.sh"                                           # ntfy.sh server URL (change if using a different server)
 NOTIFICATION_INCREMENT=25                                               # Notification frequency in percentage increments
 DRY_RUN=false                                                           # Enable this to test the notifications without actual monitoring
 ENABLE_DEBUG=false                                                      # Set to true to enable debug logging
@@ -34,6 +37,7 @@ ENABLE_DEBUG=false                                                      # Set to
 # Custom messages for each notification point
 TELEGRAM_MOVING_MESSAGE="Moving data from SSD Cache to HDD Array. &#10;Progress: <b>{percent}%</b> complete. &#10;Remaining data: {remaining_data}.&#10;Estimated completion time: {etc}.&#10;&#10;Note: Services like Plex may run slow or be unavailable during the move."
 DISCORD_MOVING_MESSAGE="Moving data from SSD Cache to HDD Array.\nProgress: **{percent}%** complete.\nRemaining data: {remaining_data}.\nEstimated completion time: {etc}.\n\nNote: Services like Plex may run slow or be unavailable during the move."
+NTFY_MOVING_MESSAGE="Moving data from SSD Cache to HDD Array.\nProgress: {percent}% complete.\nRemaining data: {remaining_data}.\nEstimated completion time: {etc}.\n\nNote: Services like Plex may run slow or be unavailable during the move."
 COMPLETION_MESSAGE="Moving has been completed!"
 
 # ---------------------------------------
@@ -62,7 +66,7 @@ MOVER_EXECUTABLE="/usr/local/sbin/mover"
 # Do Not Modify: Script essentials
 # ---------------------------------
 # Script versioning - check for updates
-CURRENT_VERSION="0.0.7"
+CURRENT_VERSION="0.0.8"
 
 # Function to check the latest version
 function check_latest_version {
@@ -80,8 +84,8 @@ total_data_moved=0
 # ---------------------------------------------------------
 
 # Check if at least one notification method is enabled
-if ! $USE_TELEGRAM && ! $USE_DISCORD; then
-    log "Error: Both USE_TELEGRAM and USE_DISCORD are set to false. At least one must be true."
+if ! $USE_TELEGRAM && ! $USE_DISCORD && ! $USE_NTFY; then
+    log "Error: All notification methods (USE_TELEGRAM, USE_DISCORD, USE_NTFY) are set to false. At least one must be true."
     exit 1
 fi
 
@@ -96,6 +100,13 @@ fi
 if [[ $USE_DISCORD == true ]]; then
     if ! [[ $DISCORD_WEBHOOK_URL =~ ^https://discord.com/api/webhooks/ ]]; then
         log "Error: Invalid Discord webhook URL."
+        exit 1
+    fi
+fi
+
+if [[ $USE_NTFY == true ]]; then
+    if [ -z "$NTFY_TOPIC" ]; then
+        log "Error: ntfy.sh topic not configured correctly."
         exit 1
     fi
 fi
@@ -133,6 +144,7 @@ if $DRY_RUN; then
     # Prepare messages with footer
     dry_run_value_message_discord="Moving data from SSD Cache to HDD Array.\nProgress: **${dry_run_percent}%** complete.\nRemaining data: ${dry_run_remaining_data}.\nEstimated completion time: ${dry_run_etc_discord}.\n\nNote: Services like Plex may run slow or be unavailable during the move."
     dry_run_value_message_telegram="Moving data from SSD Cache to HDD Array. &#10;Progress: <b>${dry_run_percent}%</b> complete. &#10;Remaining data: ${dry_run_remaining_data}.&#10;Estimated completion time: ${dry_run_etc_telegram}.&#10;&#10;Note: Services like Plex may run slow or be unavailable during the move.&#10;&#10${footer_text}"
+    dry_run_value_message_ntfy="Moving data from SSD Cache to HDD Array.\nProgress: ${dry_run_percent}% complete.\nRemaining data: ${dry_run_remaining_data}.\nEstimated completion time: ${dry_run_etc_telegram}.\n\nNote: Services like Plex may run slow or be unavailable during the move.\n\n${footer_text}"
 
     # Send test notifications
     if $USE_TELEGRAM; then
@@ -167,6 +179,11 @@ if $DRY_RUN; then
           ]
         }'
         /usr/bin/curl -s -o /dev/null -H "Content-Type: application/json" -X POST -d "$dry_run_notification_data" $DISCORD_WEBHOOK_URL
+    fi
+    
+    if $USE_NTFY; then
+        log "Sending test notification to ntfy.sh..."
+        /usr/bin/curl -s -o /dev/null -H "Title: Mover Status Update (Dry Run)" -d "$dry_run_value_message_ntfy" "$NTFY_SERVER/$NTFY_TOPIC"
     fi
     
     log "Dry-run complete. Exiting script."
@@ -254,17 +271,23 @@ function send_notification {
     value_message_telegram="${value_message_telegram//\{remaining_data\}/$remaining_data}"
     value_message_telegram="${value_message_telegram//\{etc\}/$etc_telegram}"
 
+    local value_message_ntfy="${NTFY_MOVING_MESSAGE//\{percent\}/$percent}"
+    value_message_ntfy="${value_message_ntfy//\{remaining_data\}/$remaining_data}"
+    value_message_ntfy="${value_message_ntfy//\{etc\}/$etc_telegram}"
+
     local footer_text="Version: v${CURRENT_VERSION}"
     if [[ "${LATEST_VERSION}" != "${CURRENT_VERSION}" ]]; then
         footer_text+=" (update available)"
     fi
     value_message_telegram+="&#10;&#10$footer_text"
+    value_message_ntfy+="\n\n$footer_text"
 
     # Determine the color based on completion and percentage
     local color
     if [ "$percent" -ge 100 ] || ! pgrep -x "$(basename $MOVER_EXECUTABLE)" > /dev/null; then
         value_message_discord=$COMPLETION_MESSAGE
         value_message_telegram=$COMPLETION_MESSAGE
+        value_message_ntfy=$COMPLETION_MESSAGE
         color=65280  # Green for completion
     else
         if [ "$percent" -le 34 ]; then
@@ -318,6 +341,16 @@ function send_notification {
         local response=$(curl -s -H "Content-Type: application/json" -X POST -d "$notification_data" $DISCORD_WEBHOOK_URL -w "\nHTTP status: %{http_code}\nCurl Error: %{errormsg}")
         if $ENABLE_DEBUG; then
             log "Discord response: $response"
+        fi
+    fi
+    
+    if $USE_NTFY; then
+        if $ENABLE_DEBUG; then
+            log "Preparing to send to ntfy.sh: $value_message_ntfy"
+        fi
+        local response=$(curl -s -H "Title: Mover Status Update" -d "$value_message_ntfy" "$NTFY_SERVER/$NTFY_TOPIC")
+        if $ENABLE_DEBUG; then
+            log "ntfy.sh response: $response"
         fi
     fi
 }
@@ -384,7 +417,7 @@ done
 
 # Mover Status Script
 # <https://github.com/engels74/mover-status>
-# This script monitors the progress of the "Mover" process and posts updates to a Discord/Telegram webhook.
+# This script monitors the progress of the "Mover" process and posts updates to a Discord/Telegram/ntfy.sh webhook.
 # Copyright (C) 2024 - engels74
 #
 # This program is free software: you can redistribute it and/or modify
