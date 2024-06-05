@@ -157,7 +157,6 @@ if $DRY_RUN; then
         else
             dry_run_emoji_tag="green_circle"   # Green circle
         fi
-        dry_run_emoji_tag+=","
     fi
 
     # Send test notifications
@@ -327,7 +326,6 @@ function send_notification {
                 ntfy_emoji="green_circle"  # Green circle
             fi
         fi
-        ntfy_emoji+=","
     fi
 
     # Send the notifications
