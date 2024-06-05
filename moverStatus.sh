@@ -27,6 +27,7 @@ DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/xxxx/xxxx"        # Discor
 DISCORD_NAME_OVERRIDE="Mover Bot"                                       # Display name for Discord notifications
 NTFY_TOPIC="your_topic_name"                                            # ntfy.sh topic name
 NTFY_SERVER="https://ntfy.sh"                                           # ntfy.sh server URL (change if using a different server)
+NTFY_EMOJIS=false                                                       # Enable emojis in ntfy.sh notifications
 NOTIFICATION_INCREMENT=25                                               # Notification frequency in percentage increments
 DRY_RUN=false                                                           # Enable this to test the notifications without actual monitoring
 ENABLE_DEBUG=false                                                      # Set to true to enable debug logging
@@ -147,12 +148,16 @@ if $DRY_RUN; then
     dry_run_value_message_ntfy="Moving data from SSD Cache to HDD Array."$'\n'"Progress: ${dry_run_percent}% complete."$'\n'"Remaining data: ${dry_run_remaining_data}."$'\n'"Estimated completion time: ${dry_run_etc_telegram}."$'\n\n'"Note: Services like Plex may run slow or be unavailable during the move."$'\n\n'"${footer_text}"
 
     # Determine emoji tag based on percentage
-    if [ "$dry_run_percent" -le 34 ]; then
-        dry_run_emoji_tag="red_circle"  # Red circle
-    elif [ "$dry_run_percent" -le 65 ]; then
-        dry_run_emoji_tag="orange_circle"  # Orange circle
-    else
-        dry_run_emoji_tag="green_circle"   # Green circle
+    dry_run_emoji_tag=""
+    if $NTFY_EMOJIS; then
+        if [ "$dry_run_percent" -le 34 ]; then
+            dry_run_emoji_tag="red_circle"  # Red circle
+        elif [ "$dry_run_percent" -le 65 ]; then
+            dry_run_emoji_tag="orange_circle"  # Orange circle
+        else
+            dry_run_emoji_tag="green_circle"   # Green circle
+        fi
+        dry_run_emoji_tag+=","
     fi
 
     # Send test notifications
@@ -309,17 +314,20 @@ function send_notification {
     fi
 
     # Determine the emoji tag based on completion and percentage
-    local ntfy_emoji
-    if [ "$percent" -ge 100 ] || ! pgrep -x "$(basename $MOVER_EXECUTABLE)" > /dev/null; then
-        ntfy_emoji="white_check_mark"  # Green checkmark for completion
-    else
-        if [ "$percent" -le 34 ]; then
-            ntfy_emoji="red_circle"  # Red circle
-        elif [ "$percent" -le 65 ]; then
-            ntfy_emoji="orange_circle"  # Orange circle
+    local ntfy_emoji=""
+    if $NTFY_EMOJIS; then
+        if [ "$percent" -ge 100 ] || ! pgrep -x "$(basename $MOVER_EXECUTABLE)" > /dev/null; then
+            ntfy_emoji="white_check_mark"  # Green checkmark for completion
         else
-            ntfy_emoji="green_circle"  # Green circle
+            if [ "$percent" -le 34 ]; then
+                ntfy_emoji="red_circle"  # Red circle
+            elif [ "$percent" -le 65 ]; then
+                ntfy_emoji="orange_circle"  # Orange circle
+            else
+                ntfy_emoji="green_circle"  # Green circle
+            fi
         fi
+        ntfy_emoji+=","
     fi
 
     # Send the notifications
